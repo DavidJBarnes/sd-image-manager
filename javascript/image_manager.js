@@ -46,8 +46,11 @@
 
     function handleKeyboardNavigation(event) {
         // Only handle keyboard events when Image Manager tab is active
-        const imageManagerTab = document.querySelector('#tab_image_manager');
-        if (!imageManagerTab || !imageManagerTab.style.display !== 'none') {
+        const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
+                         document.querySelector('.tab-nav .selected') ||
+                         document.querySelector('#tab_image_manager[style*="block"]');
+
+        if (!activeTab || (!activeTab.textContent.includes('Image Manager') && !activeTab.id.includes('image_manager'))) {
             return;
         }
 
@@ -61,44 +64,68 @@
         switch (event.key) {
             case 'ArrowLeft':
                 event.preventDefault();
-                const prevBtn = document.querySelector('#image_manager button:contains("Previous")') ||
-                               document.querySelector('#image_manager [data-testid*="prev"]') ||
-                               document.querySelector('#image_manager button[aria-label*="prev"]');
+                // Find the Previous button more reliably
+                const prevBtns = document.querySelectorAll('button');
+                const prevBtn = Array.from(prevBtns).find(btn =>
+                    btn.textContent.includes('Previous') ||
+                    btn.textContent.includes('←')
+                );
                 if (prevBtn) prevBtn.click();
                 break;
 
             case 'ArrowRight':
                 event.preventDefault();
-                const nextBtn = document.querySelector('#image_manager button:contains("Next")') ||
-                               document.querySelector('#image_manager [data-testid*="next"]') ||
-                               document.querySelector('#image_manager button[aria-label*="next"]');
+                // Find the Next button more reliably
+                const nextBtns = document.querySelectorAll('button');
+                const nextBtn = Array.from(nextBtns).find(btn =>
+                    btn.textContent.includes('Next') ||
+                    btn.textContent.includes('→')
+                );
                 if (nextBtn) nextBtn.click();
                 break;
 
             case 'Home':
                 event.preventDefault();
                 // Jump to first image
-                const firstThumbnail = document.querySelector('#image_manager .gallery img:first-child');
+                const firstThumbnail = document.querySelector('#thumbnail_gallery img:first-child');
                 if (firstThumbnail) firstThumbnail.click();
                 break;
 
             case 'End':
                 event.preventDefault();
                 // Jump to last image
-                const lastThumbnail = document.querySelector('#image_manager .gallery img:last-child');
+                const lastThumbnail = document.querySelector('#thumbnail_gallery img:last-child');
                 if (lastThumbnail) lastThumbnail.click();
                 break;
         }
     }
 
     function setupThumbnailEffects() {
-        // Add CSS for better thumbnail interactions
+        // Add CSS for better thumbnail interactions and horizontal scrolling
         const style = document.createElement('style');
         style.textContent = `
+            #image_manager .gallery {
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                white-space: nowrap;
+                padding-bottom: 10px;
+            }
+            
+            #image_manager .gallery > div {
+                display: inline-flex !important;
+                flex-direction: row !important;
+                gap: 8px;
+                align-items: flex-start;
+            }
+            
             #image_manager .gallery img {
                 transition: transform 0.2s ease, box-shadow 0.2s ease;
                 cursor: pointer;
                 border-radius: 4px;
+                flex-shrink: 0;
+                width: 100px !important;
+                height: 100px !important;
+                object-fit: cover;
             }
             
             #image_manager .gallery img:hover {
@@ -129,6 +156,24 @@
                 color: #6b7280;
                 text-align: center;
                 margin-top: 10px;
+            }
+            
+            /* Ensure horizontal scrolling works */
+            #thumbnail_gallery {
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+            }
+            
+            #thumbnail_gallery .grid {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                gap: 8px;
+                padding: 10px;
+            }
+            
+            #thumbnail_gallery .grid > div {
+                flex-shrink: 0;
             }
         `;
 

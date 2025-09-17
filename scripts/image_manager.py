@@ -1,10 +1,6 @@
 import os
 import gradio as gr
 from modules import script_callbacks, shared, images
-from pathlib import Path
-import json
-from datetime import datetime
-
 
 class ImageManagerExtension:
     def __init__(self):
@@ -14,7 +10,7 @@ class ImageManagerExtension:
         self.current_index = 0
 
     def get_folders(self):
-        """Get all folders in the base directory, sorted by modification time (newest first)"""
+        """Get all folders in the base directory, sorted by folder name (newest first)"""
         if not os.path.exists(self.base_path):
             return []
 
@@ -22,11 +18,11 @@ class ImageManagerExtension:
         for item in os.listdir(self.base_path):
             item_path = os.path.join(self.base_path, item)
             if os.path.isdir(item_path):
-                folders.append((item, os.path.getmtime(item_path)))
+                folders.append(item)
 
-        # Sort by modification time, newest first
-        folders.sort(key=lambda x: x[1], reverse=True)
-        return [folder[0] for folder in folders]
+        # Sort by folder name descending (assuming date format YYYY-MM-DD)
+        folders.sort(reverse=True)
+        return folders
 
     def get_images_in_folder(self, folder_name):
         """Get all image files in the specified folder"""
@@ -110,43 +106,71 @@ def create_image_manager_interface():
                     next_btn = gr.Button("Next →", variant="secondary")
 
         with gr.Row():
-            # Thumbnail gallery
+            # Thumbnail gallery - horizontal scrolling
             thumbnail_gallery = gr.Gallery(
                 label="Thumbnails",
                 show_label=True,
                 elem_id="thumbnail_gallery",
-                columns=8,
-                rows=2,
-                height="200px",
+                columns=20,  # Many columns for horizontal scrolling
+                rows=1,  # Single row
+                height="120px",
                 object_fit="cover",
-                allow_preview=False
+                allow_preview=False,
+                container=True
             )
 
         # JavaScript for keyboard navigation
         keyboard_js = """
-        function setupKeyboardNavigation() {
-            document.addEventListener('keydown', function(event) {
+        let imageManagerKeyHandler = null;
+
+        function setupImageManagerKeyboard() {
+            // Remove existing handler
+            if (imageManagerKeyHandler) {
+                document.removeEventListener('keydown', imageManagerKeyHandler);
+            }
+
+            imageManagerKeyHandler = function(event) {
+                // Check if Image Manager tab is active
+                const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
+                                 document.querySelector('.tab-nav button.selected') ||
+                                 document.querySelector('.gradio-tab.selected');
+
+                if (!activeTab || !activeTab.textContent.includes('Image Manager')) {
+                    return;
+                }
+
+                // Don't handle if user is typing in an input
                 if (event.target.tagName.toLowerCase() === 'input' || 
-                    event.target.tagName.toLowerCase() === 'textarea') {
+                    event.target.tagName.toLowerCase() === 'textarea' ||
+                    event.target.contentEditable === 'true') {
                     return;
                 }
 
                 if (event.key === 'ArrowLeft') {
                     event.preventDefault();
-                    document.querySelector('#prev_btn button').click();
+                    const prevBtn = document.querySelector('button[data-testid*="prev"]') ||
+                                   document.querySelector('button:contains("Previous")');
+                    if (prevBtn) prevBtn.click();
                 } else if (event.key === 'ArrowRight') {
                     event.preventDefault();
-                    document.querySelector('#next_btn button').click();
+                    const nextBtn = document.querySelector('button[data-testid*="next"]') ||
+                                   document.querySelector('button:contains("Next")');
+                    if (nextBtn) nextBtn.click();
                 }
-            });
+            };
+
+            document.addEventListener('keydown', imageManagerKeyHandler);
         }
 
-        // Setup keyboard navigation when the page loads
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', setupKeyboardNavigation);
-        } else {
-            setupKeyboardNavigation();
-        }
+        // Setup when page loads and tab changes
+        setTimeout(setupImageManagerKeyboard, 1000);
+
+        // Re-setup when clicking on tabs
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.tab-nav') || e.target.closest('.gradio-tab')) {
+                setTimeout(setupImageManagerKeyboard, 100);
+            }
+        });
         """
 
         # Add keyboard navigation JavaScript
@@ -196,6 +220,9 @@ def create_image_manager_interface():
             images = manager.get_images_in_folder(folder_name)
             if not images:
                 return None, 0
+
+            # Ensure current_index is within bounds
+            current_index = max(0, min(current_index, len(images) - 1))
 
             if direction == "prev" and current_index > 0:
                 current_index -= 1
