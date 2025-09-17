@@ -106,22 +106,25 @@ def create_image_manager_interface():
                     next_btn = gr.Button("Next →", variant="secondary")
 
         with gr.Row():
-            # Thumbnail gallery - horizontal scrolling
+            # Thumbnail gallery - force horizontal scrolling
             thumbnail_gallery = gr.Gallery(
                 label="Thumbnails",
                 show_label=True,
                 elem_id="thumbnail_gallery",
-                columns=20,  # Many columns for horizontal scrolling
+                columns=1,  # Force single column to prevent grid wrapping
                 rows=1,  # Single row
                 height="120px",
                 object_fit="cover",
                 allow_preview=False,
-                container=True
+                container=True,
+                elem_classes=["horizontal-gallery"]
             )
 
-        # JavaScript for keyboard navigation
+        # JavaScript for keyboard navigation that triggers Python functions
         keyboard_js = """
         let imageManagerKeyHandler = null;
+        let currentImageIndex = 0;
+        let currentImages = [];
 
         function setupImageManagerKeyboard() {
             // Remove existing handler
@@ -148,13 +151,19 @@ def create_image_manager_interface():
 
                 if (event.key === 'ArrowLeft') {
                     event.preventDefault();
-                    const prevBtn = document.querySelector('button[data-testid*="prev"]') ||
-                                   document.querySelector('button:contains("Previous")');
+                    // Find and click the Previous button to trigger Python navigation
+                    const prevBtns = document.querySelectorAll('button');
+                    const prevBtn = Array.from(prevBtns).find(btn => 
+                        btn.textContent.includes('Previous') || btn.textContent.includes('←')
+                    );
                     if (prevBtn) prevBtn.click();
                 } else if (event.key === 'ArrowRight') {
                     event.preventDefault();
-                    const nextBtn = document.querySelector('button[data-testid*="next"]') ||
-                                   document.querySelector('button:contains("Next")');
+                    // Find and click the Next button to trigger Python navigation
+                    const nextBtns = document.querySelectorAll('button');
+                    const nextBtn = Array.from(nextBtns).find(btn => 
+                        btn.textContent.includes('Next') || btn.textContent.includes('→')
+                    );
                     if (nextBtn) nextBtn.click();
                 }
             };
