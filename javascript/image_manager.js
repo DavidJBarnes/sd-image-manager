@@ -46,6 +46,28 @@
                     btn.textContent.trim().includes('→') ||
                     btn.textContent.trim() === 'Next →'
                 );
+
+            } else if (event.key === 'Delete' || event.key === 'Del') {
+                event.preventDefault();
+                // Find hidden delete button
+                targetButton = document.querySelector('#hidden_delete_btn button') ||
+                              document.querySelector('#hidden_delete_btn') ||
+                              Array.from(document.querySelectorAll('button')).find(btn =>
+                                  btn.textContent.trim() === 'Delete' && btn.style.display === 'none'
+                              );
+
+                if (targetButton) {
+                    // Confirm deletion (optional - remove if you want no confirmation)
+                    const confirmDelete = true; // Set to false if you want confirmation dialog
+                    if (confirmDelete) {
+                        console.log('Delete key pressed: deleting current image');
+                    } else {
+                        const userConfirm = confirm('Are you sure you want to delete this image?');
+                        if (!userConfirm) {
+                            return;
+                        }
+                    }
+                }
             }
 
             if (targetButton) {

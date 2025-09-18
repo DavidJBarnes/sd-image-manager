@@ -112,6 +112,13 @@ def create_image_manager_interface():
                 elem_classes=["thumbnail-gallery"]
             )
 
+        # Status message for delete operations
+        with gr.Row():
+            status_message = gr.HTML(value="", elem_id="status_message")
+
+        # Hidden button for delete functionality (triggered by JavaScript)
+        delete_btn = gr.Button("Delete", visible=False, elem_id="hidden_delete_btn")
+
         def update_folder(folder_name):
             """Update when folder changes"""
             if not folder_name:
@@ -146,6 +153,40 @@ def create_image_manager_interface():
             """Handle thumbnail selection"""
             return evt.index
 
+        def handle_delete():
+            """Handle delete button click from JavaScript"""
+            return "Processing delete..."
+
+        def delete_current_image(folder_name, images, current_idx):
+            """Delete the currently selected image"""
+            if not images or not folder_name or current_idx >= len(images):
+                return None, [], 0, "No image to delete"
+
+            try:
+                # Get the image to delete
+                image_to_delete = images[current_idx]
+
+                # Delete the file
+                if os.path.exists(image_to_delete):
+                    os.remove(image_to_delete)
+                    print(f"Deleted image: {os.path.basename(image_to_delete)}")
+
+                # Refresh the image list
+                updated_images = manager.get_images_in_folder(folder_name)
+
+                if not updated_images:
+                    return None, [], 0, "No more images in folder"
+
+                # Adjust index if necessary
+                new_index = min(current_idx, len(updated_images) - 1)
+                new_image = updated_images[new_index] if new_index < len(updated_images) else None
+
+                return new_image, updated_images, new_index, f"Deleted {os.path.basename(image_to_delete)}"
+
+            except Exception as e:
+                print(f"Error deleting image: {e}")
+                return None, images, current_idx, f"Error: {str(e)}"
+
         # Event handlers
         folder_dropdown.change(
             fn=update_folder,
@@ -172,6 +213,20 @@ def create_image_manager_interface():
             fn=lambda folder, images, idx: navigate_image("next", folder, images, idx),
             inputs=[current_folder, current_images, current_index],
             outputs=[main_image, current_index]
+        )
+
+        # Delete button handler
+        delete_btn.click(
+            fn=handle_delete,
+            outputs=[status_message]
+        ).then(
+            fn=lambda folder, images, idx: delete_current_image(folder, images, idx),
+            inputs=[current_folder, current_images, current_index],
+            outputs=[main_image, thumbnail_gallery, current_index, status_message]
+        ).then(
+            fn=lambda folder: manager.get_images_in_folder(folder),
+            inputs=[current_folder],
+            outputs=[current_images]
         )
 
         # Initialize
