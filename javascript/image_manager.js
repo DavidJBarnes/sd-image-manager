@@ -25,8 +25,11 @@
     }
 
     function setupThumbnailHandling() {
+        console.log("Setting up thumbnail handling...");
+
         // Global function for thumbnail selection (called from inline HTML)
         window.selectThumbnail = function(index, filepath) {
+            console.log('selectThumbnail called:', index, filepath);
             window.currentImageIndex = index;
 
             // Update thumbnail selection visually
@@ -42,30 +45,49 @@
                 }
             });
 
-            // Trigger the Python handler through hidden textbox
-            const eventBox = document.querySelector('#js_event_box textarea') ||
-                            document.querySelector('#js_event_box input');
+            // Find the hidden textbox more reliably
+            const eventBox = findEventBox();
             if (eventBox) {
+                console.log('Found event box, triggering change...');
                 eventBox.value = index.toString();
-                eventBox.dispatchEvent(new Event('input', { bubbles: true }));
+
+                // Try multiple event types to ensure it triggers
+                ['input', 'change', 'keyup'].forEach(eventType => {
+                    const event = new Event(eventType, { bubbles: true });
+                    eventBox.dispatchEvent(event);
+                });
+
+                // Also try setting focus and blur
+                eventBox.focus();
+                eventBox.blur();
+            } else {
+                console.error('Could not find event textbox');
+                console.log('Available elements:', document.querySelectorAll('[id*="js_event"], [id*="textbox"]'));
             }
         };
 
-        // Navigation function called by keyboard and buttons
-        window.navigateImage = function(direction) {
-            if (!window.currentImages || window.currentImages.length === 0) return;
+        function findEventBox() {
+            // Try multiple selectors to find the hidden textbox
+            const selectors = [
+                '#js_event_box textarea',
+                '#js_event_box input',
+                'textarea[data-testid="textbox"]',
+                'input[data-testid="textbox"]',
+                '#js_event_box',
+                '[id*="js_event_box"] textarea',
+                '[id*="js_event_box"] input'
+            ];
 
-            let newIndex = window.currentImageIndex;
-            if (direction === 'prev' && newIndex > 0) {
-                newIndex--;
-            } else if (direction === 'next' && newIndex < window.currentImages.length - 1) {
-                newIndex++;
+            for (const selector of selectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    console.log('Found event box with selector:', selector);
+                    return element;
+                }
             }
 
-            if (newIndex !== window.currentImageIndex) {
-                selectThumbnail(newIndex, window.currentImages[newIndex].filepath);
-            }
-        };
+            return null;
+        }
     }
 
     function setupKeyboardNavigation() {
