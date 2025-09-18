@@ -1,289 +1,267 @@
 // Image Manager Extension JavaScript
-// Place this file in: extensions/image-manager/javascript/image_manager.js
+// This file handles all client-side functionality
 
 (function() {
     'use strict';
 
     let imageManagerInitialized = false;
+    let keyboardHandler = null;
+
+    // Global variables for state management
+    window.currentImageIndex = 0;
+    window.currentImages = [];
 
     function initializeImageManager() {
         if (imageManagerInitialized) return;
 
-        // Wait for the Image Manager tab to be available
-        const checkTab = setInterval(() => {
-            const imageManagerTab = document.querySelector('[data-tab="image_manager"]') ||
-                                   document.querySelector('button[id*="image_manager"]') ||
-                                   document.querySelector('.tab-nav button:contains("Image Manager")');
+        console.log("Initializing Image Manager...");
 
-            if (imageManagerTab) {
-                clearInterval(checkTab);
-                setupImageManagerFeatures();
-                imageManagerInitialized = true;
-            }
-        }, 500);
+        // Setup all functionality
+        setupThumbnailHandling();
+        setupKeyboardNavigation();
+        setupStyles();
+
+        imageManagerInitialized = true;
     }
 
-    function setupImageManagerFeatures() {
-        console.log("Setting up Image Manager features...");
+    function setupThumbnailHandling() {
+        // Global function for thumbnail selection (called from inline HTML)
+        window.selectThumbnail = function(index, filepath) {
+            window.currentImageIndex = index;
 
-        // Enhanced keyboard navigation
-        setupKeyboardNavigation();
+            // Update thumbnail selection visually
+            document.querySelectorAll('.thumbnail-img').forEach((img, i) => {
+                if (i === index) {
+                    img.classList.add('selected');
+                    img.style.border = '3px solid #2563eb';
+                    img.style.boxShadow = '0 0 0 2px rgba(37, 99, 235, 0.3)';
+                } else {
+                    img.classList.remove('selected');
+                    img.style.border = 'none';
+                    img.style.boxShadow = 'none';
+                }
+            });
 
-        // Thumbnail hover effects
-        setupThumbnailEffects();
+            // Trigger the Python handler through hidden textbox
+            const eventBox = document.querySelector('#js_event_box textarea') ||
+                            document.querySelector('#js_event_box input');
+            if (eventBox) {
+                eventBox.value = index.toString();
+                eventBox.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
 
-        // Image loading optimization
-        setupImageOptimization();
+        // Navigation function called by keyboard and buttons
+        window.navigateImage = function(direction) {
+            if (!window.currentImages || window.currentImages.length === 0) return;
+
+            let newIndex = window.currentImageIndex;
+            if (direction === 'prev' && newIndex > 0) {
+                newIndex--;
+            } else if (direction === 'next' && newIndex < window.currentImages.length - 1) {
+                newIndex++;
+            }
+
+            if (newIndex !== window.currentImageIndex) {
+                selectThumbnail(newIndex, window.currentImages[newIndex].filepath);
+            }
+        };
     }
 
     function setupKeyboardNavigation() {
-        // Remove any existing keyboard listeners to avoid duplicates
-        document.removeEventListener('keydown', handleKeyboardNavigation);
-        document.addEventListener('keydown', handleKeyboardNavigation);
+        // Remove existing handler
+        if (keyboardHandler) {
+            document.removeEventListener('keydown', keyboardHandler);
+        }
 
-        console.log("Keyboard navigation setup complete");
+        keyboardHandler = function(event) {
+            // Check if Image Manager tab is active
+            const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
+                             document.querySelector('.tab-nav .selected');
+
+            if (!activeTab || !activeTab.textContent.includes('Image Manager')) {
+                return;
+            }
+
+            // Don't handle if user is typing
+            if (event.target.tagName.toLowerCase() === 'input' ||
+                event.target.tagName.toLowerCase() === 'textarea' ||
+                event.target.contentEditable === 'true') {
+                return;
+            }
+
+            switch (event.key) {
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    // Find and click Previous button
+                    const prevBtn = Array.from(document.querySelectorAll('button')).find(btn =>
+                        btn.textContent.includes('Previous') || btn.textContent.includes('←')
+                    );
+                    if (prevBtn) {
+                        console.log('Clicking Previous button via keyboard');
+                        prevBtn.click();
+                    }
+                    break;
+
+                case 'ArrowRight':
+                    event.preventDefault();
+                    // Find and click Next button
+                    const nextBtn = Array.from(document.querySelectorAll('button')).find(btn =>
+                        btn.textContent.includes('Next') || btn.textContent.includes('→')
+                    );
+                    if (nextBtn) {
+                        console.log('Clicking Next button via keyboard');
+                        nextBtn.click();
+                    }
+                    break;
+
+                case 'Home':
+                    event.preventDefault();
+                    if (window.currentImages && window.currentImages.length > 0) {
+                        selectThumbnail(0, window.currentImages[0].filepath);
+                    }
+                    break;
+
+                case 'End':
+                    event.preventDefault();
+                    if (window.currentImages && window.currentImages.length > 0) {
+                        const lastIndex = window.currentImages.length - 1;
+                        selectThumbnail(lastIndex, window.currentImages[lastIndex].filepath);
+                    }
+                    break;
+            }
+        };
+
+        document.addEventListener('keydown', keyboardHandler);
+        console.log('Keyboard navigation setup complete');
     }
 
-    function handleKeyboardNavigation(event) {
-        // Only handle keyboard events when Image Manager tab is active
-        const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
-                         document.querySelector('.tab-nav .selected') ||
-                         document.querySelector('#tab_image_manager[style*="block"]');
-
-        if (!activeTab || (!activeTab.textContent.includes('Image Manager') && !activeTab.id.includes('image_manager'))) {
-            return;
-        }
-
-        // Don't handle keyboard events when user is typing in inputs
-        if (event.target.tagName.toLowerCase() === 'input' ||
-            event.target.tagName.toLowerCase() === 'textarea' ||
-            event.target.contentEditable === 'true') {
-            return;
-        }
-
-        switch (event.key) {
-            case 'ArrowLeft':
-                event.preventDefault();
-                // Find the Previous button and click it to trigger Python function
-                const prevBtns = document.querySelectorAll('button');
-                const prevBtn = Array.from(prevBtns).find(btn =>
-                    btn.textContent.includes('Previous') ||
-                    btn.textContent.includes('←')
-                );
-                if (prevBtn) {
-                    console.log('Clicking Previous button');
-                    prevBtn.click();
-                }
-                break;
-
-            case 'ArrowRight':
-                event.preventDefault();
-                // Find the Next button and click it to trigger Python function
-                const nextBtns = document.querySelectorAll('button');
-                const nextBtn = Array.from(nextBtns).find(btn =>
-                    btn.textContent.includes('Next') ||
-                    btn.textContent.includes('→')
-                );
-                if (nextBtn) {
-                    console.log('Clicking Next button');
-                    nextBtn.click();
-                }
-                break;
-
-            case 'Home':
-                event.preventDefault();
-                // Jump to first image by clicking first thumbnail
-                const firstThumbnail = document.querySelector('#thumbnail_gallery img:first-child');
-                if (firstThumbnail) firstThumbnail.click();
-                break;
-
-            case 'End':
-                event.preventDefault();
-                // Jump to last image by clicking last thumbnail
-                const lastThumbnail = document.querySelector('#thumbnail_gallery img:last-child');
-                if (lastThumbnail) lastThumbnail.click();
-                break;
-        }
-    }
-
-    function setupThumbnailEffects() {
-        // Add CSS for better thumbnail interactions and force horizontal scrolling
+    function setupStyles() {
+        // Add CSS for thumbnail gallery and interactions
         const style = document.createElement('style');
+        style.id = 'image-manager-styles';
         style.textContent = `
-            /* Force horizontal layout for thumbnails */
-            #thumbnail_gallery {
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
-                max-height: 140px !important;
+            /* Custom thumbnail gallery styles */
+            #custom-thumbnail-gallery {
+                scrollbar-width: thin;
+                scrollbar-color: #888 #f1f1f1;
             }
             
-            #thumbnail_gallery .grid,
-            #thumbnail_gallery > div > div {
-                display: flex !important;
-                flex-direction: row !important;
-                flex-wrap: nowrap !important;
-                gap: 8px !important;
-                align-items: flex-start !important;
-                padding: 10px !important;
-                width: max-content !important;
+            #custom-thumbnail-gallery::-webkit-scrollbar {
+                height: 8px;
             }
             
-            #thumbnail_gallery .grid > div,
-            #thumbnail_gallery > div > div > div {
-                flex-shrink: 0 !important;
-                width: 100px !important;
-                height: 100px !important;
-                display: inline-block !important;
-            }
-            
-            #thumbnail_gallery img {
-                width: 100px !important;
-                height: 100px !important;
-                object-fit: cover !important;
+            #custom-thumbnail-gallery::-webkit-scrollbar-track {
+                background: #f1f1f1;
                 border-radius: 4px;
-                cursor: pointer;
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
-                flex-shrink: 0 !important;
             }
             
-            #thumbnail_gallery img:hover {
-                transform: scale(1.05);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                z-index: 10;
-                position: relative;
+            #custom-thumbnail-gallery::-webkit-scrollbar-thumb {
+                background: #888;
+                border-radius: 4px;
             }
             
-            #thumbnail_gallery img.selected {
-                border: 3px solid #2563eb;
-                box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+            #custom-thumbnail-gallery::-webkit-scrollbar-thumb:hover {
+                background: #555;
             }
             
-            /* Ensure gallery container allows horizontal scroll */
-            .horizontal-gallery {
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
+            /* Ensure thumbnails maintain proper sizing */
+            .thumbnail-img {
+                min-width: 200px !important;
+                max-width: 200px !important;
+                min-height: 200px !important;
+                max-height: 200px !important;
             }
             
-            .horizontal-gallery > div {
-                overflow-x: auto !important;
-                overflow-y: hidden !important;
-            }
-            
-            /* Main image styling */
+            /* Main image container */
             #image_manager .main-image {
-                max-height: 600px;
-                object-fit: contain;
                 background: #f8f9fa;
                 border-radius: 8px;
             }
             
-            #image_manager .navigation-buttons {
-                margin: 10px 0;
+            /* Button styling */
+            #image_manager button {
+                transition: all 0.2s ease;
             }
             
-            #image_manager .keyboard-hint {
-                font-size: 0.875rem;
-                color: #6b7280;
-                text-align: center;
-                margin-top: 10px;
+            #image_manager button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            
+            /* Hidden textbox */
+            #js_event_box {
+                display: none !important;
             }
         `;
 
         if (!document.querySelector('#image-manager-styles')) {
-            style.id = 'image-manager-styles';
             document.head.appendChild(style);
         }
-
-        // Force horizontal layout after a short delay to ensure DOM is ready
-        setTimeout(() => {
-            const gallery = document.querySelector('#thumbnail_gallery');
-            if (gallery) {
-                // Find all nested divs and force flex layout
-                const containers = gallery.querySelectorAll('div');
-                containers.forEach(container => {
-                    container.style.display = 'flex';
-                    container.style.flexDirection = 'row';
-                    container.style.flexWrap = 'nowrap';
-                    container.style.overflowX = 'auto';
-                    container.style.overflowY = 'hidden';
-                });
-            }
-        }, 500);
     }
 
-    function setupImageOptimization() {
-        // Preload adjacent images for smoother navigation
-        function preloadAdjacentImages() {
-            const currentImage = document.querySelector('#image_manager .main-image img');
-            if (!currentImage) return;
-
-            const thumbnails = document.querySelectorAll('#image_manager .gallery img');
-            const currentSrc = currentImage.src;
-            let currentIndex = -1;
-
-            // Find current image index
-            thumbnails.forEach((thumb, index) => {
-                if (thumb.src === currentSrc) {
-                    currentIndex = index;
+    function observeForChanges() {
+        // Watch for thumbnail gallery updates
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === 1 && node.id === 'custom-thumbnail-gallery') {
+                            console.log('Thumbnail gallery updated');
+                            // Update current images from the DOM
+                            updateCurrentImagesFromDOM();
+                        }
+                    });
                 }
             });
-
-            if (currentIndex === -1) return;
-
-            // Preload previous and next images
-            const preloadImages = [];
-            if (currentIndex > 0) preloadImages.push(thumbnails[currentIndex - 1].src);
-            if (currentIndex < thumbnails.length - 1) preloadImages.push(thumbnails[currentIndex + 1].src);
-
-            preloadImages.forEach(src => {
-                const img = new Image();
-                img.src = src;
-            });
-        }
-
-        // Set up mutation observer to detect image changes
-        const observer = new MutationObserver(() => {
-            setTimeout(preloadAdjacentImages, 100);
         });
 
-        const imageManager = document.querySelector('#image_manager');
-        if (imageManager) {
-            observer.observe(imageManager, { childList: true, subtree: true });
-        }
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
     }
 
-    function addKeyboardHints() {
-        const imageManager = document.querySelector('#image_manager');
-        if (!imageManager || imageManager.querySelector('.keyboard-hint')) return;
+    function updateCurrentImagesFromDOM() {
+        // Extract current images from thumbnail gallery
+        const thumbnails = document.querySelectorAll('.thumbnail-img');
+        window.currentImages = Array.from(thumbnails).map((img, index) => ({
+            filename: img.title || `Image ${index + 1}`,
+            filepath: img.dataset.filepath || img.src
+        }));
 
-        const hint = document.createElement('div');
-        hint.className = 'keyboard-hint';
-        hint.textContent = 'Use ← → arrow keys to navigate, Home/End to jump to first/last image';
-
-        const navigationArea = imageManager.querySelector('.navigation-buttons') ||
-                              imageManager.querySelector('.gradio-button-group');
-        if (navigationArea) {
-            navigationArea.parentNode.insertBefore(hint, navigationArea.nextSibling);
+        // Update current index from selected thumbnail
+        const selectedThumbnail = document.querySelector('.thumbnail-img.selected');
+        if (selectedThumbnail) {
+            window.currentImageIndex = parseInt(selectedThumbnail.dataset.index) || 0;
         }
     }
 
     // Initialize when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeImageManager);
-    } else {
-        initializeImageManager();
+    function waitForDOM() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeImageManager);
+        } else {
+            initializeImageManager();
+        }
     }
 
-    // Also initialize when the page changes (for single-page app behavior)
+    // Initialize
+    waitForDOM();
+
+    // Re-initialize when needed
     window.addEventListener('load', initializeImageManager);
 
-    // Re-initialize if the interface is dynamically loaded
-    const observer = new MutationObserver(() => {
-        if (!imageManagerInitialized && document.querySelector('[data-tab="image_manager"]')) {
-            initializeImageManager();
+    // Watch for tab changes
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.tab-nav') || e.target.textContent.includes('Image Manager')) {
+            setTimeout(initializeImageManager, 100);
         }
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    // Setup observers
+    observeForChanges();
+
+    console.log('Image Manager JavaScript loaded');
 
 })();

@@ -1,6 +1,10 @@
 import os
 import gradio as gr
 from modules import script_callbacks, shared, images
+from pathlib import Path
+import json
+from datetime import datetime
+
 
 class ImageManagerExtension:
     def __init__(self):
@@ -51,22 +55,31 @@ class ImageManagerExtension:
             return image_path
         return None
 
-    def navigate_image(self, direction, current_folder, current_index):
-        """Navigate through images using keyboard or button input"""
-        if not current_folder:
-            return None, current_index, []
 
-        images = self.get_images_in_folder(current_folder)
-        if not images:
-            return None, 0, []
+def create_thumbnail_html(images, selected_index=0):
+    """Create custom HTML for horizontal thumbnail gallery"""
+    if not images:
+        return "<div id='custom-thumbnail-gallery' style='width: 100%; height: 220px; overflow-x: auto; overflow-y: hidden; display: flex; gap: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;'>No images found</div>"
 
-        if direction == "left" and current_index > 0:
-            current_index -= 1
-        elif direction == "right" and current_index < len(images) - 1:
-            current_index += 1
+    html_parts = [
+        "<div id='custom-thumbnail-gallery' style='width: 100%; height: 220px; overflow-x: auto; overflow-y: hidden; display: flex; gap: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;'>"]
 
-        current_image = self.load_image(images[current_index][1])
-        return current_image, current_index, images
+    for i, (filename, filepath) in enumerate(images):
+        selected_class = "selected" if i == selected_index else ""
+        html_parts.append(f"""
+            <img src="file/{filepath}" 
+                 data-index="{i}" 
+                 data-filepath="{filepath}"
+                 class="thumbnail-img {selected_class}" 
+                 onclick="selectThumbnail({i}, '{filepath}')"
+                 style="width: 200px; height: 200px; object-fit: cover; border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; {('border: 3px solid #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);' if i == selected_index else '')}"
+                 onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.3)'; this.style.zIndex='10';"
+                 onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='{('0 0 0 2px rgba(37, 99, 235, 0.3)' if i == selected_index else 'none')}'; this.style.zIndex='1';"
+                 title="{filename}">
+        """)
+
+    html_parts.append("</div>")
+    return "".join(html_parts)
 
 
 def create_image_manager_interface():
@@ -106,129 +119,41 @@ def create_image_manager_interface():
                     next_btn = gr.Button("Next →", variant="secondary")
 
         with gr.Row():
-            # Thumbnail gallery - force horizontal scrolling
-            thumbnail_gallery = gr.Gallery(
-                label="Thumbnails",
-                show_label=True,
-                elem_id="thumbnail_gallery",
-                columns=1,  # Force single column to prevent grid wrapping
-                rows=1,  # Single row
-                height="120px",
-                object_fit="cover",
-                allow_preview=False,
-                container=True,
-                elem_classes=["horizontal-gallery"]
-            )
-
-        # JavaScript for keyboard navigation that triggers Python functions
-        keyboard_js = """
-        let imageManagerKeyHandler = null;
-        let currentImageIndex = 0;
-        let currentImages = [];
-
-        function setupImageManagerKeyboard() {
-            // Remove existing handler
-            if (imageManagerKeyHandler) {
-                document.removeEventListener('keydown', imageManagerKeyHandler);
-            }
-
-            imageManagerKeyHandler = function(event) {
-                // Check if Image Manager tab is active
-                const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
-                                 document.querySelector('.tab-nav button.selected') ||
-                                 document.querySelector('.gradio-tab.selected');
-
-                if (!activeTab || !activeTab.textContent.includes('Image Manager')) {
-                    return;
-                }
-
-                // Don't handle if user is typing in an input
-                if (event.target.tagName.toLowerCase() === 'input' || 
-                    event.target.tagName.toLowerCase() === 'textarea' ||
-                    event.target.contentEditable === 'true') {
-                    return;
-                }
-
-                if (event.key === 'ArrowLeft') {
-                    event.preventDefault();
-                    // Find and click the Previous button to trigger Python navigation
-                    const prevBtns = document.querySelectorAll('button');
-                    const prevBtn = Array.from(prevBtns).find(btn => 
-                        btn.textContent.includes('Previous') || btn.textContent.includes('←')
-                    );
-                    if (prevBtn) prevBtn.click();
-                } else if (event.key === 'ArrowRight') {
-                    event.preventDefault();
-                    // Find and click the Next button to trigger Python navigation
-                    const nextBtns = document.querySelectorAll('button');
-                    const nextBtn = Array.from(nextBtns).find(btn => 
-                        btn.textContent.includes('Next') || btn.textContent.includes('→')
-                    );
-                    if (nextBtn) nextBtn.click();
-                }
-            };
-
-            document.addEventListener('keydown', imageManagerKeyHandler);
-        }
-
-        // Setup when page loads and tab changes
-        setTimeout(setupImageManagerKeyboard, 1000);
-
-        // Re-setup when clicking on tabs
-        document.addEventListener('click', function(e) {
-            if (e.target.closest('.tab-nav') || e.target.closest('.gradio-tab')) {
-                setTimeout(setupImageManagerKeyboard, 100);
-            }
-        });
-        """
-
-        # Add keyboard navigation JavaScript
-        gr.HTML(f"<script>{keyboard_js}</script>")
+            # Custom horizontal thumbnail gallery using HTML
+            with gr.Column():
+                thumbnail_html = gr.HTML(
+                    value="<div id='custom-thumbnail-gallery' style='width: 100%; height: 220px; overflow-x: auto; overflow-y: hidden; display: flex; gap: 10px; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: #f8f9fa;'></div>",
+                    elem_id="thumbnail_container"
+                )
 
         def update_folder_content(folder_name):
             """Update content when folder selection changes"""
             if not folder_name:
-                return None, [], 0, folder_name, []
+                return None, "", 0, folder_name, []
 
             images = manager.get_images_in_folder(folder_name)
             if not images:
-                return None, [], 0, folder_name, images
+                return None, "", 0, folder_name, images
 
             # Load first image
             first_image = manager.load_image(images[0][1])
 
-            # Prepare thumbnail data for gallery
-            thumbnail_data = [(img[1], img[0]) for img in images]  # (path, caption)
+            # Create custom thumbnail HTML
+            thumbnail_html_content = create_thumbnail_html(images, 0)
 
-            return first_image, thumbnail_data, 0, folder_name, images
-
-        def on_thumbnail_select(evt: gr.SelectData):
-            """Handle thumbnail selection"""
-            if not evt.index and evt.index != 0:
-                return None, 0
-
-            folder_name = folder_dropdown.value
-            if not folder_name:
-                return None, 0
-
-            images = manager.get_images_in_folder(folder_name)
-            if evt.index < len(images):
-                selected_image = manager.load_image(images[evt.index][1])
-                return selected_image, evt.index
-
-            return None, 0
+            return first_image, thumbnail_html_content, 0, folder_name, images
 
         def navigate_images(direction):
-            """Handle image navigation"""
-            folder_name = folder_dropdown.value
+            """Handle image navigation - called by buttons and returns updated state"""
+            folder_name = current_folder_state.value
             current_index = current_index_state.value if current_index_state.value is not None else 0
 
             if not folder_name:
-                return None, current_index
+                return None, "", current_index
 
             images = manager.get_images_in_folder(folder_name)
             if not images:
-                return None, 0
+                return None, "", 0
 
             # Ensure current_index is within bounds
             current_index = max(0, min(current_index, len(images) - 1))
@@ -239,28 +164,55 @@ def create_image_manager_interface():
                 current_index += 1
 
             selected_image = manager.load_image(images[current_index][1])
-            return selected_image, current_index
+            updated_html = create_thumbnail_html(images, current_index)
+
+            return selected_image, updated_html, current_index
+
+        # Custom JavaScript handler for thumbnail clicks
+        def handle_thumbnail_click(index_str):
+            """Handle thumbnail selection from JavaScript"""
+            try:
+                index = int(index_str) if index_str else 0
+                folder_name = current_folder_state.value
+
+                if not folder_name:
+                    return None, "", index
+
+                images = manager.get_images_in_folder(folder_name)
+                if index < len(images):
+                    selected_image = manager.load_image(images[index][1])
+                    updated_html = create_thumbnail_html(images, index)
+                    return selected_image, updated_html, index
+            except:
+                pass
+
+            return None, "", 0
+
+        # Hidden textbox to receive JavaScript events
+        js_event_box = gr.Textbox(visible=False, elem_id="js_event_box")
 
         # Event handlers
         folder_dropdown.change(
             fn=update_folder_content,
             inputs=[folder_dropdown],
-            outputs=[main_image, thumbnail_gallery, current_index_state, current_folder_state, current_images_state]
+            outputs=[main_image, thumbnail_html, current_index_state, current_folder_state, current_images_state]
         )
 
-        thumbnail_gallery.select(
-            fn=on_thumbnail_select,
-            outputs=[main_image, current_index_state]
+        # Handle JavaScript events
+        js_event_box.change(
+            fn=handle_thumbnail_click,
+            inputs=[js_event_box],
+            outputs=[main_image, thumbnail_html, current_index_state]
         )
 
         prev_btn.click(
             fn=lambda: navigate_images("prev"),
-            outputs=[main_image, current_index_state]
+            outputs=[main_image, thumbnail_html, current_index_state]
         )
 
         next_btn.click(
             fn=lambda: navigate_images("next"),
-            outputs=[main_image, current_index_state]
+            outputs=[main_image, thumbnail_html, current_index_state]
         )
 
         # Initialize with first folder if available
@@ -268,12 +220,12 @@ def create_image_manager_interface():
             folders = manager.get_folders()
             if folders:
                 return update_folder_content(folders[0])
-            return None, [], 0, None, []
+            return None, "", 0, None, []
 
         # Load initial content
         image_manager_interface.load(
             fn=initialize_interface,
-            outputs=[main_image, thumbnail_gallery, current_index_state, current_folder_state, current_images_state]
+            outputs=[main_image, thumbnail_html, current_index_state, current_folder_state, current_images_state]
         )
 
     return image_manager_interface
