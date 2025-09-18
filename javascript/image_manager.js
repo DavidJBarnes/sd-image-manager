@@ -1,289 +1,53 @@
-// Image Manager Extension JavaScript
-// This file handles all client-side functionality
-
+// Simple keyboard navigation for Image Manager
 (function() {
     'use strict';
 
-    let imageManagerInitialized = false;
-    let keyboardHandler = null;
+    let keyboardSetup = false;
 
-    // Global variables for state management
-    window.currentImageIndex = 0;
-    window.currentImages = [];
+    function setupKeyboard() {
+        if (keyboardSetup) return;
 
-    function initializeImageManager() {
-        if (imageManagerInitialized) return;
-
-        console.log("Initializing Image Manager...");
-
-        // Setup all functionality
-        setupThumbnailHandling();
-        setupKeyboardNavigation();
-        setupStyles();
-
-        imageManagerInitialized = true;
-    }
-
-    function setupThumbnailHandling() {
-        console.log("Setting up thumbnail handling...");
-
-        // Global function for thumbnail selection (called from inline HTML)
-        window.selectThumbnail = function(index, filepath) {
-            console.log('selectThumbnail called:', index, filepath);
-            window.currentImageIndex = index;
-
-            // Update thumbnail selection visually
-            document.querySelectorAll('.thumbnail-img').forEach((img, i) => {
-                if (i === index) {
-                    img.classList.add('selected');
-                    img.style.border = '3px solid #2563eb';
-                    img.style.boxShadow = '0 0 0 2px rgba(37, 99, 235, 0.3)';
-                } else {
-                    img.classList.remove('selected');
-                    img.style.border = 'none';
-                    img.style.boxShadow = 'none';
-                }
-            });
-
-            // Find the hidden textbox more reliably
-            const eventBox = findEventBox();
-            if (eventBox) {
-                console.log('Found event box, triggering change...');
-                eventBox.value = index.toString();
-
-                // Try multiple event types to ensure it triggers
-                ['input', 'change', 'keyup'].forEach(eventType => {
-                    const event = new Event(eventType, { bubbles: true });
-                    eventBox.dispatchEvent(event);
-                });
-
-                // Also try setting focus and blur
-                eventBox.focus();
-                eventBox.blur();
-            } else {
-                console.error('Could not find event textbox');
-                console.log('Available elements:', document.querySelectorAll('[id*="js_event"], [id*="textbox"]'));
-            }
-        };
-
-        function findEventBox() {
-            // Try multiple selectors to find the hidden textbox
-            const selectors = [
-                '#js_event_box textarea',
-                '#js_event_box input',
-                'textarea[data-testid="textbox"]',
-                'input[data-testid="textbox"]',
-                '#js_event_box',
-                '[id*="js_event_box"] textarea',
-                '[id*="js_event_box"] input'
-            ];
-
-            for (const selector of selectors) {
-                const element = document.querySelector(selector);
-                if (element) {
-                    console.log('Found event box with selector:', selector);
-                    return element;
-                }
-            }
-
-            return null;
-        }
-    }
-
-    function setupKeyboardNavigation() {
-        // Remove existing handler
-        if (keyboardHandler) {
-            document.removeEventListener('keydown', keyboardHandler);
-        }
-
-        keyboardHandler = function(event) {
+        document.addEventListener('keydown', function(event) {
             // Check if Image Manager tab is active
-            const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]') ||
-                             document.querySelector('.tab-nav .selected');
-
+            const activeTab = document.querySelector('.tab-nav button[aria-selected="true"]');
             if (!activeTab || !activeTab.textContent.includes('Image Manager')) {
                 return;
             }
 
-            // Don't handle if user is typing
+            // Don't handle if typing in input
             if (event.target.tagName.toLowerCase() === 'input' ||
-                event.target.tagName.toLowerCase() === 'textarea' ||
-                event.target.contentEditable === 'true') {
+                event.target.tagName.toLowerCase() === 'textarea') {
                 return;
             }
 
-            switch (event.key) {
-                case 'ArrowLeft':
-                    event.preventDefault();
-                    // Find and click Previous button
-                    const prevBtn = Array.from(document.querySelectorAll('button')).find(btn =>
-                        btn.textContent.includes('Previous') || btn.textContent.includes('←')
-                    );
-                    if (prevBtn) {
-                        console.log('Clicking Previous button via keyboard');
-                        prevBtn.click();
-                    }
-                    break;
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                const prevBtn = document.querySelector('button:contains("Previous")') ||
+                               Array.from(document.querySelectorAll('button')).find(btn =>
+                                   btn.textContent.includes('Previous') || btn.textContent.includes('←'));
+                if (prevBtn) prevBtn.click();
 
-                case 'ArrowRight':
-                    event.preventDefault();
-                    // Find and click Next button
-                    const nextBtn = Array.from(document.querySelectorAll('button')).find(btn =>
-                        btn.textContent.includes('Next') || btn.textContent.includes('→')
-                    );
-                    if (nextBtn) {
-                        console.log('Clicking Next button via keyboard');
-                        nextBtn.click();
-                    }
-                    break;
-
-                case 'Home':
-                    event.preventDefault();
-                    if (window.currentImages && window.currentImages.length > 0) {
-                        selectThumbnail(0, window.currentImages[0].filepath);
-                    }
-                    break;
-
-                case 'End':
-                    event.preventDefault();
-                    if (window.currentImages && window.currentImages.length > 0) {
-                        const lastIndex = window.currentImages.length - 1;
-                        selectThumbnail(lastIndex, window.currentImages[lastIndex].filepath);
-                    }
-                    break;
+            } else if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                const nextBtn = document.querySelector('button:contains("Next")') ||
+                               Array.from(document.querySelectorAll('button')).find(btn =>
+                                   btn.textContent.includes('Next') || btn.textContent.includes('→'));
+                if (nextBtn) nextBtn.click();
             }
-        };
-
-        document.addEventListener('keydown', keyboardHandler);
-        console.log('Keyboard navigation setup complete');
-    }
-
-    function setupStyles() {
-        // Add CSS for thumbnail gallery and interactions
-        const style = document.createElement('style');
-        style.id = 'image-manager-styles';
-        style.textContent = `
-            /* Custom thumbnail gallery styles */
-            #custom-thumbnail-gallery {
-                scrollbar-width: thin;
-                scrollbar-color: #888 #f1f1f1;
-            }
-            
-            #custom-thumbnail-gallery::-webkit-scrollbar {
-                height: 8px;
-            }
-            
-            #custom-thumbnail-gallery::-webkit-scrollbar-track {
-                background: #f1f1f1;
-                border-radius: 4px;
-            }
-            
-            #custom-thumbnail-gallery::-webkit-scrollbar-thumb {
-                background: #888;
-                border-radius: 4px;
-            }
-            
-            #custom-thumbnail-gallery::-webkit-scrollbar-thumb:hover {
-                background: #555;
-            }
-            
-            /* Ensure thumbnails maintain proper sizing */
-            .thumbnail-img {
-                min-width: 200px !important;
-                max-width: 200px !important;
-                min-height: 200px !important;
-                max-height: 200px !important;
-            }
-            
-            /* Main image container */
-            #image_manager .main-image {
-                background: #f8f9fa;
-                border-radius: 8px;
-            }
-            
-            /* Button styling */
-            #image_manager button {
-                transition: all 0.2s ease;
-            }
-            
-            #image_manager button:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            
-            /* Hidden textbox */
-            #js_event_box {
-                display: none !important;
-            }
-        `;
-
-        if (!document.querySelector('#image-manager-styles')) {
-            document.head.appendChild(style);
-        }
-    }
-
-    function observeForChanges() {
-        // Watch for thumbnail gallery updates
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach((node) => {
-                        if (node.nodeType === 1 && node.id === 'custom-thumbnail-gallery') {
-                            console.log('Thumbnail gallery updated');
-                            // Update current images from the DOM
-                            updateCurrentImagesFromDOM();
-                        }
-                    });
-                }
-            });
         });
 
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
-
-    function updateCurrentImagesFromDOM() {
-        // Extract current images from thumbnail gallery
-        const thumbnails = document.querySelectorAll('.thumbnail-img');
-        window.currentImages = Array.from(thumbnails).map((img, index) => ({
-            filename: img.title || `Image ${index + 1}`,
-            filepath: img.dataset.filepath || img.src
-        }));
-
-        // Update current index from selected thumbnail
-        const selectedThumbnail = document.querySelector('.thumbnail-img.selected');
-        if (selectedThumbnail) {
-            window.currentImageIndex = parseInt(selectedThumbnail.dataset.index) || 0;
-        }
-    }
-
-    // Initialize when DOM is ready
-    function waitForDOM() {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeImageManager);
-        } else {
-            initializeImageManager();
-        }
+        keyboardSetup = true;
+        console.log('Image Manager keyboard navigation setup');
     }
 
     // Initialize
-    waitForDOM();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupKeyboard);
+    } else {
+        setupKeyboard();
+    }
 
-    // Re-initialize when needed
-    window.addEventListener('load', initializeImageManager);
-
-    // Watch for tab changes
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.tab-nav') || e.target.textContent.includes('Image Manager')) {
-            setTimeout(initializeImageManager, 100);
-        }
-    });
-
-    // Setup observers
-    observeForChanges();
-
-    console.log('Image Manager JavaScript loaded');
+    // Also setup when page loads
+    window.addEventListener('load', setupKeyboard);
 
 })();
