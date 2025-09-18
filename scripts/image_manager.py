@@ -70,13 +70,16 @@ def create_thumbnail_html(images, selected_index=0):
         # A1111 serves files from the webui directory, so we need to provide the full path
         selected_style = "border: 3px solid #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);" if i == selected_index else ""
 
+        # Escape quotes to prevent JavaScript errors
+        escaped_filepath = filepath.replace("'", "\\'")
+
         html_parts.append(f"""
             <img src="file={filepath}" 
                  data-index="{i}" 
                  data-filepath="{filepath}"
                  data-filename="{filename}"
                  class="thumbnail-img {'selected' if i == selected_index else ''}" 
-                 onclick="selectThumbnail({i}, '{filepath.replace("'", "\\'")}')"
+                 onclick="selectThumbnail({i}, '{escaped_filepath}')"
                  style="width: 200px; height: 200px; object-fit: cover; border-radius: 8px; cursor: pointer; flex-shrink: 0; transition: transform 0.2s ease, box-shadow 0.2s ease; {selected_style}"
                  onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 12px rgba(0, 0, 0, 0.3)'; this.style.zIndex='10';"
                  onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='{('0 0 0 2px rgba(37, 99, 235, 0.3)' if i == selected_index else 'none')}'; this.style.zIndex='1';"
@@ -126,6 +129,8 @@ def create_thumbnail_html(images, selected_index=0):
         }};
     </script>
     """)
+
+    return "".join(html_parts)
 
     return "".join(html_parts)
 
