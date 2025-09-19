@@ -76,12 +76,15 @@ def create_image_manager_interface():
         current_index = gr.State(value=0)
 
         with gr.Row():
-            folder_dropdown = gr.Dropdown(
-                label="Select Folder",
-                choices=manager.get_folders(),
-                value=manager.get_folders()[0] if manager.get_folders() else None,
-                interactive=True
-            )
+            with gr.Column(scale=4):
+                folder_dropdown = gr.Dropdown(
+                    label="Select Folder",
+                    choices=manager.get_folders(),
+                    value=manager.get_folders()[0] if manager.get_folders() else None,
+                    interactive=True
+                )
+            with gr.Column(scale=1, min_width=100):
+                refresh_btn = gr.Button("🔄 Refresh", variant="secondary", size="sm")
 
         with gr.Row():
             with gr.Column():
@@ -118,6 +121,19 @@ def create_image_manager_interface():
 
         # Hidden button for delete functionality (triggered by JavaScript)
         delete_btn = gr.Button("Delete", visible=False, elem_id="hidden_delete_btn")
+
+        def refresh_folders():
+            """Refresh the folder list and return updated dropdown"""
+            print("Refreshing folder list...")
+
+            # Get fresh folder list
+            updated_folders = manager.get_folders()
+            print(f"Found {len(updated_folders)} folders: {updated_folders}")
+
+            # Return the updated choices and select the first one
+            selected_folder = updated_folders[0] if updated_folders else None
+
+            return gr.Dropdown(choices=updated_folders, value=selected_folder), selected_folder
 
         def update_folder(folder_name):
             """Update when folder changes"""
@@ -188,6 +204,17 @@ def create_image_manager_interface():
                 return None, images, current_idx, f"Error: {str(e)}"
 
         # Event handlers
+
+        # Refresh button - updates dropdown and loads first folder
+        refresh_btn.click(
+            fn=refresh_folders,
+            outputs=[folder_dropdown, current_folder]
+        ).then(
+            fn=update_folder,
+            inputs=[current_folder],
+            outputs=[main_image, thumbnail_gallery, current_index, current_folder, current_images]
+        )
+
         folder_dropdown.change(
             fn=update_folder,
             inputs=[folder_dropdown],
